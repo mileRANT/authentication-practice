@@ -3,7 +3,7 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-
+const encrypt = require("mongoose-encryption"); //LEVEL 2 - Database Encryption
 const app = express();
 
 app.use(express.static("public"));
@@ -15,10 +15,22 @@ app.use(bodyParser.urlencoded({
 //connect to mongodb
 mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 
-const userSchema = {
+
+//the below is too simple. its just a javascript object, so we need to use a mongoose.Schema object instead
+// const userSchema = {
+const userSchema = new mongoose.Schema({
     email: String,
     password: String
-};
+});
+
+const secret = "SECRETKEYTHATSHOULDNOTBESHOWNTOANYONE";
+//need to add plugin before creating the mongoose.model schema
+//LEVEL 2 - Database Encryption
+userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]}); //AES Encryption done with this line. mongoose will do the work for us
+//^ by having secret and this encryption package here, someone whom has access to both will be able to recreate and decrypt passwords
+
+//for multiple field encryptions, use this
+// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password", "moretoencrypt"]});
 
 const User = new mongoose.model("User", userSchema);
 
