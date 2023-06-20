@@ -5,9 +5,11 @@ const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
 // const encrypt = require("mongoose-encryption"); //LEVEL 2 - Database Encryption
-const md5 = require("md5"); //Level 3: Hash
+// const md5 = require("md5"); //Level 3: Hash
 //instead of md5 which is commonplace, can use BCRYPT which is slower to crack
 // LEVEL 4 - Bcrypt [hashing] and Salting
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 
@@ -61,17 +63,21 @@ app.get("/login", function(req,res){
 
 app.post("/login", function(req,res){
     const username = req.body.username;
-    // const password = req.body.password;
-    const password = md5(req.body.password); //LEVEL 3
+    const password = req.body.password; //LEVEL 4 use bcrypt with the plain text
+    // const password = md5(req.body.password); //LEVEL 3
+    
 
     try{  
         loginUser(username).then(function(foundUser){
             if (foundUser){
-                if (foundUser.password === password){
-                    res.render("secrets");
-                }else {
-                    console.log("incorrect password")
-                };
+                // if (foundUser.password === password){
+                bcrypt.compare(password, foundUser.password, function(err, result){
+                    if (result == true){
+                        res.render("secrets");
+                    }else {
+                        console.log("incorrect password")
+                    };
+                })
             };
         });
     } catch(err) {
@@ -95,21 +101,26 @@ app.get("/register", function(req,res){
 });
 
 app.post("/register", function(req,res){
-    const newUser = new User({
-        email: req.body.username,
-        // password: req.body.password
-        password: md5(req.body.password) //LEVEL 3 - Hash
-    });
-    console.log(newUser);
 
-//we need to be able to catch this error and not show our secrets
-    try{
-        addUser(newUser).then(function(){
-            res.render("secrets");
+    bcrypt.hash(req.body.password, saltRounds, function(err,hash){
+        const newUser = new User({
+            email: req.body.username,
+            // password: req.body.password
+            // password: md5(req.body.password) //LEVEL 3 - Hash
+            password: hash
         });
-    } catch(err) {
-        console.log(err);
-    };
+        // console.log(newUser);
+    
+    //we need to be able to catch this error and not show our secrets
+        try{
+            addUser(newUser).then(function(){
+                res.render("secrets");
+            });
+        } catch(err) {
+            console.log(err);
+        };
+    });
+
 
 
     //angela yu's version below which no longer works as callback is no longer supported by mongoose
