@@ -1,4 +1,5 @@
 //jshint esversion:6
+require('dotenv').config(); //environment variables
 const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
@@ -23,10 +24,14 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-const secret = "SECRETKEYTHATSHOULDNOTBESHOWNTOANYONE";
+//dropped table, removed secret and changed key
+//const secret = "SECRETKEYTHATSHOULDNOTBESHOWNTOANYONE";
+
 //need to add plugin before creating the mongoose.model schema
 //LEVEL 2 - Database Encryption
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]}); //AES Encryption done with this line. mongoose will do the work for us
+//userSchema.plugin(encrypt, {secret: secret, encryptedFields: ["password"]}); //AES Encryption done with this line. mongoose will do the work for us
+//LEVEL 2 with environment variable
+userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ["password"]}); //AES Encryption done with this line. mongoose will do the work for us
 //^ by having secret and this encryption package here, someone whom has access to both will be able to recreate and decrypt passwords
 
 //for multiple field encryptions, use this
