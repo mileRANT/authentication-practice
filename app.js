@@ -48,7 +48,8 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId: String    //for google oauth. this is used in the findorcreate function
+    googleId: String,    //for google oauth. this is used in the findorcreate function
+    secret: String
 });
 
 //dropped table, removed secret and changed key
@@ -114,6 +115,16 @@ async function addUser(newUser){
 async function loginUser(username){
     const findUser = await User.findOne({email: username});
     return findUser;
+}
+
+async function findID(userId){
+    const findUser = await User.findById(userId);
+    return findUser;
+}
+
+async function findSecrets(){
+    const foundSecrets = await User.find({"secret":{$ne:null}})
+    return foundSecrets;
 }
 
 app.get("/", function(req,res){
@@ -240,11 +251,45 @@ app.post("/register", function(req,res){
 
 app.get("/secrets", function(req, res){
     //we now have a secrets route as we can now check if user is logged in [using passports/sessions]
+    // if (req.isAuthenticated()){
+    //     res.render("secrets");
+    // } else {
+    //     res.redirect("login");
+    // }
+
+    //after level 6, anyone can see this page. however not everyone can submit
+    findSecrets().then(function(foundSecrets){
+        if (foundSecrets){
+            res.render("secrets", {usersWithSecrets: foundSecrets})
+        }
+    })
+});
+
+app.get("/submit", function(req, res){
+    //we now have a submit route as we can now check if user is logged in [using passports/sessions]
     if (req.isAuthenticated()){
-        res.render("secrets");
+        res.render("submit");
     } else {
         res.redirect("login");
     }
+});
+
+app.post("/submit", function(req, res){
+    const submittedSecret = req.body.secret;
+    console.log(req.body.secret)
+    //check which user is logged in to submit their secret
+    console.log(req.user) // passports adds this to req
+    console.log(req.user.id)
+    findID(req.user.id).then(function(foundUser){
+        if (foundUser){
+            // console.log("Found user")
+            foundUser.secret = submittedSecret;
+            foundUser.save();
+            res.redirect("/secrets");
+            // console.log(foundUser)
+        };
+    });
+
 });
 
 //now that we have authentication, create a logout route
