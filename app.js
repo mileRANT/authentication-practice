@@ -16,6 +16,11 @@ const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 
+//LEVEL 6 OAuth [passport-google-oauth20]
+//check the documentation [under strategies] on passport.js. need to make google dev console
+const GoogleStrategy = require("passport-google-oauth20").Strategy;
+const findOrCreate = require("mongoose-findorcreate");
+
 const app = express();
 
 app.use(express.static("public"));
@@ -42,7 +47,8 @@ mongoose.connect("mongodb://127.0.0.1:27017/userDB");
 // const userSchema = {
 const userSchema = new mongoose.Schema({
     email: String,
-    password: String
+    password: String,
+    googleId: String    //for google oauth. this is used in the findorcreate function
 });
 
 //dropped table, removed secret and changed key
@@ -52,6 +58,7 @@ const userSchema = new mongoose.Schema({
 //LEVEL 2 with environment variable
 // userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ["password"]}); //AES Encryption done with this line. mongoose will do the work for us
 userSchema.plugin(passportLocalMongoose); //LEVEL 5 - used for hashing and salting
+userSchema.plugin(findOrCreate); //LEVEL 6 - used in the OAuth strategy
 
 //^ by having secret and this encryption package here, someone whom has access to both will be able to recreate and decrypt passwords
 
@@ -62,8 +69,43 @@ const User = new mongoose.model("User", userSchema);
 
 //LEVEL 5 - Serialize and Deserialize strategy. passportLocalMongoose doing a lot of the work
 passport.use(User.createStrategy());
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+
+//LEVEL 6 the above serialize/deserialize was from localmongoose and does not work with OAuth.
+passport.serializeUser(function(user, cb) {
+    process.nextTick(function() {
+      return cb(null, {
+        id: user.id,
+        username: user.username,
+        picture: user.picture
+      });
+    });
+  });
+  
+  passport.deserializeUser(function(user, cb) {
+    process.nextTick(function() {
+      return cb(null, user);
+    });
+  });
+
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo" //this is not in the documentation. google+ api deprecated so need to add this
+
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    console.log(profile);
+    //note that findOrCreate is a pseudocode placeholder name made by passport documentation
+    //however someone has created a library to make this function. mongoose-findorcreate
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 async function addUser(newUser){
     const addedUser = await newUser.save();
@@ -131,8 +173,19 @@ app.post("/login", function(req,res){
     //             }
     //         }
     //     }
-    // });
+    // });`
 });
+
+//LEVEL 6 - route for using the OAuth2.0, using Google authentication
+app.get("/auth/google",
+  passport.authenticate('google', { scope: ["profile"] }));
+
+app.get("/auth/google/secrets", 
+  passport.authenticate('google', { failureRedirect: "/login" }),
+  function(req, res) {
+    // Successful authentication, redirect to secrets.
+    res.redirect("/secrets");
+  });
 
 app.get("/register", function(req,res){
     res.render("register");
@@ -195,10 +248,18 @@ app.get("/secrets", function(req, res){
 });
 
 //now that we have authentication, create a logout route
-app.get("logout", function(req, res){
-    req.logout();
-    res.redirect("/")
-});
+// app.get("logout", function(req, res){
+//     req.logout();
+//     res.redirect("/")
+// });
+
+//below is from the documentation. works better than the simplified version above after adding in the OAuth
+app.get('/logout', function(req, res, next) {
+    req.logout(function(err) {
+      if (err) { return next(err); }
+      res.redirect('/');
+    });
+  });
 
 
 app.listen(3000, function(){
